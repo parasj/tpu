@@ -561,12 +561,14 @@ def model_fn(features, labels, mode, params):
   else:
     scaffold_fn = None
 
+  # logging_hook = tf.train.LoggingTensorHook({"loss": loss}, every_n_iter=10)
   return tf.estimator.tpu.TPUEstimatorSpec(
       mode=mode,
       loss=loss,
       train_op=train_op,
       host_call=host_call,
       eval_metrics=eval_metrics,
+      # training_hooks=[logging_hook],
       scaffold_fn=scaffold_fn)
 
 
