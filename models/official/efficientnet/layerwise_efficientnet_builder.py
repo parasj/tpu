@@ -32,20 +32,15 @@ MEAN_RGB = [0.485 * 255, 0.456 * 255, 0.406 * 255]
 STDDEV_RGB = [0.229 * 255, 0.224 * 255, 0.225 * 255]
 
 
-def efficientnet_params(model_name):
+def efficientnet_ld_params(model_name):
   """Get efficientnet params based on model name."""
   params_dict = {
-      # (width_coefficient, depth_coefficient, resolution, dropout_rate)
-      'efficientnet-b0': (1.0, 1.0, 224, 0.2),
-      'efficientnet-b1': (1.0, 1.1, 240, 0.2),
-      'efficientnet-b2': (1.1, 1.2, 260, 0.3),
-      'efficientnet-b3': (1.2, 1.4, 300, 0.3),
-      'efficientnet-b4': (1.4, 1.8, 380, 0.4),
-      'efficientnet-b5': (1.6, 2.2, 456, 0.4),
-      'efficientnet-b6': (1.8, 2.6, 528, 0.5),
-      'efficientnet-b7': (2.0, 3.1, 600, 0.5),
-      'efficientnet-b8': (2.2, 3.6, 672, 0.5),
-      'efficientnet-l2': (4.3, 5.3, 800, 0.5),
+      # (width_coefficient, depth_coefficient, resolution, dropout_rate, layers_to_skip)
+      'efficientnet-ld-b0': (1.0, 1.0, 224, 0.2, []),
+      'efficientnet-ld-b0-d2d6d7d9d12d13': (1.0, 1.0, 224, 0.2, [2, 6, 7, 9, 12, 13]),
+      'efficientnet-ld-b0-d2d6d9d12': (1.0, 1.0, 224, 0.2, [2, 6, 9, 12]),
+      'efficientnet-ld-b0-d6d9': (1.0, 1.0, 224, 0.2, [6, 9]),
+      'efficientnet-ld-b0-d6': (1.0, 1.0, 224, 0.2, [6]),
   }
   return params_dict[model_name]
 
@@ -177,12 +172,14 @@ _DEFAULT_BLOCKS_ARGS = [
 ]
 
 
-def efficientnet(width_coefficient=None,
+def efficientnet_ld(width_coefficient=None,
                  depth_coefficient=None,
                  dropout_rate=0.2,
-                 survival_prob=0.8):
+                 survival_prob=0.8,
+                 layers_to_skip=[]):
   """Creates a efficientnet model."""
   global_params = efficientnet_model.GlobalParams(
+      layers_to_skip=layers_to_skip,
       blocks_args=_DEFAULT_BLOCKS_ARGS,
       batch_norm_momentum=0.99,
       batch_norm_epsilon=1e-3,
@@ -205,11 +202,11 @@ def efficientnet(width_coefficient=None,
 
 def get_model_params(model_name, override_params):
   """Get the block args and global params for a given model."""
-  if model_name.startswith('efficientnet'):
-    width_coefficient, depth_coefficient, _, dropout_rate = (
-        efficientnet_params(model_name))
-    global_params = efficientnet(
-        width_coefficient, depth_coefficient, dropout_rate)
+  if model_name.startswith('efficientnet-ld'):
+    width_coefficient, depth_coefficient, _, dropout_rate, layers_to_skip = efficientnet_ld_params(model_name)
+    global_params = efficientnet_ld(width_coefficient, depth_coefficient, dropout_rate, layers_to_skip=layers_to_skip)
+    logging.info(f"model params layers to skip {layers_to_skip}")
+    logging.info(f"model params global params to skip {global_params}")
   else:
     raise NotImplementedError('model name is not pre-defined: %s' % model_name)
 
@@ -217,6 +214,7 @@ def get_model_params(model_name, override_params):
     # ValueError will be raised here if override_params has fields not included
     # in global_params.
     global_params = global_params._replace(**override_params)
+  logging.info(f"model params global params to skip after override {global_params}")
 
   decoder = BlockDecoder()
   blocks_args = decoder.decode(global_params.blocks_args)
@@ -259,6 +257,8 @@ def build_model(images,
   assert isinstance(images, tf.Tensor)
   assert not (features_only and pooled_features_only)
 
+  logging.info(f"Model name = {model_name}")
+
   # For backward compatibility.
   if override_params and override_params.get('drop_connect_rate', None):
     override_params['survival_prob'] = 1 - override_params['drop_connect_rate']
@@ -270,6 +270,7 @@ def build_model(images,
     if fine_tuning:
       override_params['relu_fn'] = functools.partial(swish, use_native=False)
   blocks_args, global_params = get_model_params(model_name, override_params)
+  logging.error(f"Global params = {global_params}")
 
   if model_dir:
     param_file = os.path.join(model_dir, 'model_params.txt')
@@ -283,6 +284,7 @@ def build_model(images,
         f.write('blocks_args= %s\n\n' % str(blocks_args))
 
   with tf.variable_scope(model_name):
+    logging.error(f"Layers to skip = {global_params.layers_to_skip}")
     model = efficientnet_model.Model(blocks_args, global_params)
     outputs = model(
         images,

@@ -41,7 +41,7 @@ GlobalParams = collections.namedtuple('GlobalParams', [
     'num_classes', 'width_coefficient', 'depth_coefficient', 'depth_divisor',
     'min_depth', 'survival_prob', 'relu_fn', 'batch_norm', 'use_se',
     'se_coefficient', 'local_pooling', 'condconv_num_experts',
-    'clip_projection_output', 'blocks_args', 'fix_head_stem',
+    'clip_projection_output', 'blocks_args', 'fix_head_stem', 'layers_to_skip',
 ])
 # Note: the default value of None is not necessarily valid. It is valid to leave
 # width_coefficient, depth_coefficient at None, which is treated as 1.0 (and
@@ -529,7 +529,11 @@ class Model(tf.keras.Model):
         epsilon=batch_norm_epsilon)
 
     # Builds blocks.
+    logging.error(f"Number of blocks = {len(self._blocks_args)}")
+    block_idx = 0
     for i, block_args in enumerate(self._blocks_args):
+      logging.info(block_args)
+      logging.error(f"Using efficient net block {i} (out of {block_idx})")
       assert block_args.num_repeat > 0
       assert block_args.space2depth in [0, 1, 2]
       # Update block input and output filters based on depth multiplier.
@@ -537,12 +541,21 @@ class Model(tf.keras.Model):
                                     self._global_params)
 
       output_filters = round_filters(block_args.output_filters,
-                                     self._global_params)
+                                    self._global_params)
       kernel_size = block_args.kernel_size
       if self._fix_head_stem and (i == 0 or i == len(self._blocks_args) - 1):
         repeats = block_args.num_repeat
       else:
         repeats = round_repeats(block_args.num_repeat, self._global_params)
+
+      # compute layer range
+      layer_list = [block_idx + j for j in range(repeats)]
+      block_idx += repeats
+      
+      filtered_layer_list = [x for x in layer_list if x not in self._global_params.layers_to_skip]
+      logging.info(f"Filtering layer list {layer_list} to {filtered_layer_list} ({repeats} to {len(filtered_layer_list)})")
+      repeats = len(filtered_layer_list)
+
       block_args = block_args._replace(
           input_filters=input_filters,
           output_filters=output_filters,
@@ -559,7 +572,7 @@ class Model(tf.keras.Model):
             input_filters=block_args.input_filters * depth_factor,
             output_filters=block_args.output_filters * depth_factor,
             kernel_size=((block_args.kernel_size + 1) // 2 if depth_factor > 1
-                         else block_args.kernel_size))
+                        else block_args.kernel_size))
         # if the first block has stride-2 and space2depth transformation
         if (block_args.strides[0] == 2 and block_args.strides[1] == 2):
           block_args = block_args._replace(strides=[1, 1])

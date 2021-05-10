@@ -14,7 +14,9 @@
 # ==============================================================================
 """Utilities for model builder or input size."""
 
+from absl import logging
 import efficientnet_builder
+import layerwise_efficientnet_builder
 from condconv import efficientnet_condconv_builder
 from edgetpu import efficientnet_edgetpu_builder
 from lite import efficientnet_lite_builder
@@ -23,8 +25,11 @@ from tpu import efficientnet_x_builder
 
 def get_model_builder(model_name):
   """Get the model_builder module for a given model name."""
+  logging.info(f"Matching model {model_name}")
   if model_name.startswith('efficientnet-lite'):
     return efficientnet_lite_builder
+  elif model_name.startswith('efficientnet-ld-'):
+    return layerwise_efficientnet_builder
   elif model_name.startswith('efficientnet-edgetpu-'):
     return efficientnet_edgetpu_builder
   elif model_name.startswith('efficientnet-condconv-'):
@@ -44,6 +49,9 @@ def get_model_input_size(model_name):
   if model_name.startswith('efficientnet-lite'):
     _, _, image_size, _ = (
         efficientnet_lite_builder.efficientnet_lite_params(model_name))
+  elif model_name.startswith('efficientnet-ld-'):
+    x = layerwise_efficientnet_builder.efficientnet_ld_params(model_name)
+    image_size = x[2]
   elif model_name.startswith('efficientnet-edgetpu-'):
     _, _, image_size, _ = (
         efficientnet_edgetpu_builder.efficientnet_edgetpu_params(model_name))

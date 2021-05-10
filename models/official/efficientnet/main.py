@@ -377,6 +377,7 @@ def model_fn(features, labels, mode, params):
     model_builder = model_builder_factory.get_model_builder(FLAGS.model_name)
     normalized_features = normalize_features(features, model_builder.MEAN_RGB,
                                              model_builder.STDDEV_RGB)
+    logging.error(f"main.py model name = {FLAGS.model_name}")
     logits, _ = model_builder.build_model(
         normalized_features,
         model_name=FLAGS.model_name,
@@ -561,12 +562,14 @@ def model_fn(features, labels, mode, params):
   else:
     scaffold_fn = None
 
+  # logging_hook = tf.train.LoggingTensorHook({"loss": loss}, every_n_iter=10)
   return tf.estimator.tpu.TPUEstimatorSpec(
       mode=mode,
       loss=loss,
       train_op=train_op,
       host_call=host_call,
       eval_metrics=eval_metrics,
+      # training_hooks=[logging_hook],
       scaffold_fn=scaffold_fn)
 
 
