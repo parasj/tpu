@@ -529,62 +529,71 @@ class Model(tf.keras.Model):
         epsilon=batch_norm_epsilon)
 
     # Builds blocks.
+    logging.error(f"Number of blocks = {len(self._blocks_args)}")
+    block_idx = 0
     for i, block_args in enumerate(self._blocks_args):
-      if self._global_params.layers_to_skip and i not in self._global_params.layers_to_skip:
-        print(f"Using efficient net block {i}")
-        assert block_args.num_repeat > 0
-        assert block_args.space2depth in [0, 1, 2]
-        # Update block input and output filters based on depth multiplier.
-        input_filters = round_filters(block_args.input_filters,
-                                      self._global_params)
+      logging.info(block_args)
+      logging.error(f"Using efficient net block {i} (out of {block_idx})")
+      assert block_args.num_repeat > 0
+      assert block_args.space2depth in [0, 1, 2]
+      # Update block input and output filters based on depth multiplier.
+      input_filters = round_filters(block_args.input_filters,
+                                    self._global_params)
 
-        output_filters = round_filters(block_args.output_filters,
-                                      self._global_params)
-        kernel_size = block_args.kernel_size
-        if self._fix_head_stem and (i == 0 or i == len(self._blocks_args) - 1):
-          repeats = block_args.num_repeat
-        else:
-          repeats = round_repeats(block_args.num_repeat, self._global_params)
-        block_args = block_args._replace(
-            input_filters=input_filters,
-            output_filters=output_filters,
-            num_repeat=repeats)
-
-        # The first block needs to take care of stride and filter size increase.
-        conv_block = self._get_conv_block(block_args.conv_type)
-        if not block_args.space2depth:  #  no space2depth at all
-          self._blocks.append(conv_block(block_args, self._global_params))
-        else:
-          # if space2depth, adjust filters, kernels, and strides.
-          depth_factor = int(4 / block_args.strides[0] / block_args.strides[1])
-          block_args = block_args._replace(
-              input_filters=block_args.input_filters * depth_factor,
-              output_filters=block_args.output_filters * depth_factor,
-              kernel_size=((block_args.kernel_size + 1) // 2 if depth_factor > 1
-                          else block_args.kernel_size))
-          # if the first block has stride-2 and space2depth transformation
-          if (block_args.strides[0] == 2 and block_args.strides[1] == 2):
-            block_args = block_args._replace(strides=[1, 1])
-            self._blocks.append(conv_block(block_args, self._global_params))
-            block_args = block_args._replace(  # sp stops at stride-2
-                space2depth=0,
-                input_filters=input_filters,
-                output_filters=output_filters,
-                kernel_size=kernel_size)
-          elif block_args.space2depth == 1:
-            self._blocks.append(conv_block(block_args, self._global_params))
-            block_args = block_args._replace(space2depth=2)
-          else:
-            self._blocks.append(conv_block(block_args, self._global_params))
-        if block_args.num_repeat > 1:  # rest of blocks with the same block_arg
-          # pylint: disable=protected-access
-          block_args = block_args._replace(
-              input_filters=block_args.output_filters, strides=[1, 1])
-          # pylint: enable=protected-access
-        for _ in xrange(block_args.num_repeat - 1):
-          self._blocks.append(conv_block(block_args, self._global_params))
+      output_filters = round_filters(block_args.output_filters,
+                                    self._global_params)
+      kernel_size = block_args.kernel_size
+      if self._fix_head_stem and (i == 0 or i == len(self._blocks_args) - 1):
+        repeats = block_args.num_repeat
       else:
-        print(f"Skipping efficient net block {i}")
+        repeats = round_repeats(block_args.num_repeat, self._global_params)
+
+      # compute layer range
+      layer_list = [block_idx + j for j in range(repeats)]
+      block_idx += repeats
+      
+      filtered_layer_list = [x for x in layer_list if x not in self._global_params.layers_to_skip]
+      logging.info(f"Filtering layer list {layer_list} to {filtered_layer_list} ({repeats} to {len(filtered_layer_list)})")
+      repeats = len(filtered_layer_list)
+
+      block_args = block_args._replace(
+          input_filters=input_filters,
+          output_filters=output_filters,
+          num_repeat=repeats)
+
+      # The first block needs to take care of stride and filter size increase.
+      conv_block = self._get_conv_block(block_args.conv_type)
+      if not block_args.space2depth:  #  no space2depth at all
+        self._blocks.append(conv_block(block_args, self._global_params))
+      else:
+        # if space2depth, adjust filters, kernels, and strides.
+        depth_factor = int(4 / block_args.strides[0] / block_args.strides[1])
+        block_args = block_args._replace(
+            input_filters=block_args.input_filters * depth_factor,
+            output_filters=block_args.output_filters * depth_factor,
+            kernel_size=((block_args.kernel_size + 1) // 2 if depth_factor > 1
+                        else block_args.kernel_size))
+        # if the first block has stride-2 and space2depth transformation
+        if (block_args.strides[0] == 2 and block_args.strides[1] == 2):
+          block_args = block_args._replace(strides=[1, 1])
+          self._blocks.append(conv_block(block_args, self._global_params))
+          block_args = block_args._replace(  # sp stops at stride-2
+              space2depth=0,
+              input_filters=input_filters,
+              output_filters=output_filters,
+              kernel_size=kernel_size)
+        elif block_args.space2depth == 1:
+          self._blocks.append(conv_block(block_args, self._global_params))
+          block_args = block_args._replace(space2depth=2)
+        else:
+          self._blocks.append(conv_block(block_args, self._global_params))
+      if block_args.num_repeat > 1:  # rest of blocks with the same block_arg
+        # pylint: disable=protected-access
+        block_args = block_args._replace(
+            input_filters=block_args.output_filters, strides=[1, 1])
+        # pylint: enable=protected-access
+      for _ in xrange(block_args.num_repeat - 1):
+        self._blocks.append(conv_block(block_args, self._global_params))
 
     # Head part.
     self._conv_head = utils.Conv2D(

@@ -30,6 +30,7 @@ export LOG_PATH="/home/paras/tpu/logs/${MODEL_NAME}_${RUN_ID}.log"
 export DATA_DIR=${STORAGE_BUCKET}/imagenet_processed
 export PYTHONPATH=$PYTHONPATH:~/tpu/models
 
+echo "Model name is $MODEL_NAME"
 echo "Saving output to $MODEL_DIR"
 echo "Logging to $LOG_PATH"
 echo "Using $TPU_NAME"
@@ -43,4 +44,4 @@ python3 main.py \
   --model_name="${MODEL_NAME}" \
   --skip_host_call=false \
   --train_batch_size=1024 \
-  --train_steps=656844 |& tee "$LOG_PATH"
+  --train_steps=1751592 |& tee "$LOG_PATH"

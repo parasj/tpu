@@ -377,6 +377,7 @@ def model_fn(features, labels, mode, params):
     model_builder = model_builder_factory.get_model_builder(FLAGS.model_name)
     normalized_features = normalize_features(features, model_builder.MEAN_RGB,
                                              model_builder.STDDEV_RGB)
+    logging.error(f"main.py model name = {FLAGS.model_name}")
     logits, _ = model_builder.build_model(
         normalized_features,
         model_name=FLAGS.model_name,

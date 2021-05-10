@@ -14,6 +14,7 @@
 # ==============================================================================
 """Utilities for model builder or input size."""
 
+from absl import logging
 import efficientnet_builder
 import layerwise_efficientnet_builder
 from condconv import efficientnet_condconv_builder
@@ -24,6 +25,7 @@ from tpu import efficientnet_x_builder
 
 def get_model_builder(model_name):
   """Get the model_builder module for a given model name."""
+  logging.info(f"Matching model {model_name}")
   if model_name.startswith('efficientnet-lite'):
     return efficientnet_lite_builder
   elif model_name.startswith('efficientnet-ld-'):
