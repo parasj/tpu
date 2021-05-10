@@ -531,7 +531,7 @@ class Model(tf.keras.Model):
     # Builds blocks.
     for i, block_args in enumerate(self._blocks_args):
       if self._global_params.layers_to_skip and i not in self._global_params.layers_to_skip:
-        print("Skipping efficient net block i")
+        print(f"Using efficient net block {i}")
         assert block_args.num_repeat > 0
         assert block_args.space2depth in [0, 1, 2]
         # Update block input and output filters based on depth multiplier.
@@ -583,6 +583,8 @@ class Model(tf.keras.Model):
           # pylint: enable=protected-access
         for _ in xrange(block_args.num_repeat - 1):
           self._blocks.append(conv_block(block_args, self._global_params))
+      else:
+        print(f"Skipping efficient net block {i}")
 
     # Head part.
     self._conv_head = utils.Conv2D(
