@@ -839,7 +839,7 @@ def main(unused_argv):
         # At the end of training, a checkpoint will be written to --model_dir.
         next_checkpoint = min(current_step + FLAGS.steps_per_eval,
                               FLAGS.train_steps)
-        est.train(input_fn=imagenet_train.input_fn, max_steps=next_checkpoint)
+        est.train(input_fn=imagenet_train.input_fn, max_steps=int(next_checkpoint))
         current_step = next_checkpoint
 
         logging.info('Finished training up to step %d. Elapsed seconds %d.',
